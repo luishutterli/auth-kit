@@ -1,16 +1,12 @@
 {
   "name": "@luishutterli/auth-kit",
-  "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy --minify",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
-  },
   "dependencies": {
-    "hono": "^4.7.7"
+    "@types/pg": "^8.11.14",
+    "hono": "^4.7.7",
+    "pg": "^8.15.6"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250419.0",
-    "wrangler": "^4.4.0",
-    "@luishutterli/auth-kit-types": "link:@luishutterli/auth-kit-types"
+    "@luishutterli/auth-kit-types": "link:@luishutterli/auth-kit-types",
+    "@types/bun": "latest"
   }
 }

@@ -10,10 +10,12 @@
     History:
     Version     Date        Who      Description
     1.0         19.04.2025  Luis     created
-
+    1.1         26.04.2025  Luis     removed wrong identifying relations, removed enum enforcing on oauth provider, renived engine (pg compliance)
+    
     Copyright © 2025 Luis Hutterli, Switzerland. All rights reserved.
     This program/script is intended for the auth kit service built for swisscounts.ch
 ----------------------------------------------------- */
+
 -- -----------------------------------------------------
 -- Schema AuthKit
 -- -----------------------------------------------------
@@ -30,8 +32,7 @@ CREATE TABLE TOrganizations (
   orgName VARCHAR(255) NOT NULL,
   orgCreated TIMESTAMP NOT NULL DEFAULT now(),
   orgStatus ENUM('active', 'suspended', 'deleted') NULL,
-  PRIMARY KEY (orgId))
-ENGINE = InnoDB;
+  PRIMARY KEY (orgId));
 
 
 -- -----------------------------------------------------
@@ -50,8 +51,7 @@ CREATE TABLE TAccounts (
   accCreated TIMESTAMP NOT NULL DEFAULT now(),
   accStatus ENUM('active', 'suspended', 'deleted') NOT NULL,
   PRIMARY KEY (accId),
-  UNIQUE INDEX accEmail_UNIQUE (accEmail ASC) VISIBLE)
-ENGINE = InnoDB;
+  UNIQUE INDEX accEmail_UNIQUE (accEmail ASC) VISIBLE);
 
 
 -- -----------------------------------------------------
@@ -64,8 +64,7 @@ CREATE TABLE TOrgMemberships (
   accId INT NOT NULL,
   orgMembCreated TIMESTAMP NOT NULL DEFAULT now(),
   orgMembStatus ENUM('active', 'suspended', 'deleted') NOT NULL,
-  PRIMARY KEY (orgId, accId))
-ENGINE = InnoDB;
+  PRIMARY KEY (orgId, accId));
 
 
 -- -----------------------------------------------------
@@ -78,8 +77,7 @@ CREATE TABLE TGroups (
   groupName VARCHAR(255) NOT NULL,
   groupDescription TEXT NULL,
   orgId INT NULL COMMENT 'null for global groups',
-  PRIMARY KEY (groupId))
-ENGINE = InnoDB;
+  PRIMARY KEY (groupId));
 
 
 -- -----------------------------------------------------
@@ -91,8 +89,7 @@ CREATE TABLE TPermissions (
   permId VARCHAR(255) NOT NULL COMMENT 'Format = level:resource:action (eg. org:invoice:delete)',
   permName VARCHAR(255) NOT NULL,
   permDescription TEXT NULL,
-  PRIMARY KEY (permId))
-ENGINE = InnoDB;
+  PRIMARY KEY (permId));
 
 
 -- -----------------------------------------------------
@@ -105,8 +102,7 @@ CREATE TABLE TGroupGrants (
   permId VARCHAR(255) NOT NULL,
   groupGrantCreated TIMESTAMP NOT NULL DEFAULT now(),
   groupGrantStatus ENUM('active', 'suspended', 'deleted') NOT NULL,
-  PRIMARY KEY (permId, groupId))
-ENGINE = InnoDB;
+  PRIMARY KEY (permId, groupId));
 
 
 -- -----------------------------------------------------
@@ -120,8 +116,7 @@ CREATE TABLE TGroupMemberships (
   orgId INT NULL COMMENT 'null if group scope is global',
   groupMembCreated TIMESTAMP NOT NULL DEFAULT now(),
   groupMembStatus ENUM('active', 'suspended', 'deleted') NOT NULL,
-  PRIMARY KEY (groupId, accId))
-ENGINE = InnoDB;
+  PRIMARY KEY (groupId, accId));
 
 
 -- -----------------------------------------------------
@@ -136,8 +131,7 @@ CREATE TABLE TAccountGrants (
   accGrantCreated TIMESTAMP NOT NULL DEFAULT now(),
   accGrantGivenBy INT NOT NULL,
   accGrantStatus ENUM('active', 'suspended', 'deleted') NOT NULL,
-  PRIMARY KEY (permId, accId, orgId))
-ENGINE = InnoDB;
+  PRIMARY KEY (permId, accId, orgId));
 
 
 -- -----------------------------------------------------
@@ -152,8 +146,7 @@ CREATE TABLE TLoginAttempts (
   loginAttemptTime TIMESTAMP NOT NULL DEFAULT now(),
   loginAttemptSuccess TINYINT NOT NULL,
   accId INT NOT NULL,
-  PRIMARY KEY (loginAttemptId, accId))
-ENGINE = InnoDB;
+  PRIMARY KEY (loginAttemptId));
 
 
 -- -----------------------------------------------------
@@ -163,13 +156,12 @@ DROP TABLE IF EXISTS TOAuthAccountLinks ;
 
 CREATE TABLE TOAuthAccountLinks (
   oauthProviderUID VARCHAR(255) NOT NULL COMMENT 'User ID in providers DB',
-  oauthProvider ENUM('google', 'microsoft') NOT NULL COMMENT 'Sample Data',
+  oauthProvider VARCHAR(255) NOT NULL COMMENT 'Sample Data',
   oauthLinkUsername VARCHAR(255) NOT NULL,
   oauthLinkCreated TIMESTAMP NOT NULL DEFAULT now(),
   oauthLinkStatus ENUM('active', 'suspended', 'deleted') NOT NULL,
   accId INT NOT NULL COMMENT 'The username on the providors side',
-  PRIMARY KEY (oauthProviderUID, accId))
-ENGINE = InnoDB;
+  PRIMARY KEY (oauthProviderUID, oauthProvider));
 
 
 -- -----------------------------------------------------
@@ -184,8 +176,7 @@ CREATE TABLE TTwoFactorTOTP (
   totpEnabled TINYINT NOT NULL DEFAULT 1 COMMENT 'eg. admin override',
   totpCreated TIMESTAMP NOT NULL DEFAULT now(),
   totpLastUsed TIMESTAMP NULL DEFAULT now(),
-  PRIMARY KEY (accId))
-ENGINE = InnoDB;
+  PRIMARY KEY (accId));
 
 
 -- -----------------------------------------------------
@@ -198,8 +189,7 @@ CREATE TABLE TEmailVerifications (
   emailVerificationCreated TIMESTAMP NOT NULL DEFAULT now() COMMENT 'This is the hashed token',
   emailVerificationExpires TIMESTAMP NOT NULL,
   accId INT NOT NULL,
-  PRIMARY KEY (emailVerificationId, accId))
-ENGINE = InnoDB;
+  PRIMARY KEY (emailVerificationId));
 
 
 -- -----------------------------------------------------
@@ -213,6 +203,4 @@ CREATE TABLE TPasswordResets (
   pwResetExpires TIMESTAMP NOT NULL,
   pwResetUsed TIMESTAMP NULL,
   accId INT NOT NULL,
-  PRIMARY KEY (pwResetId, accId))
-ENGINE = InnoDB;
-
+  PRIMARY KEY (pwResetId));
