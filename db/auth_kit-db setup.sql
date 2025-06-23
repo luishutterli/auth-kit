@@ -171,7 +171,7 @@ DROP TABLE IF EXISTS TTwoFactorTOTP ;
 
 CREATE TABLE TTwoFactorTOTP (
   accId INT NOT NULL,
-  totpSecret CHAR(512) NOT NULL COMMENT 'encrypted totp secret, size not known yet',
+  totpSecret VARCHAR(512) NOT NULL COMMENT 'encrypted totp secret, size not known yet',
   totpConfirmed TINYINT NOT NULL DEFAULT 0 COMMENT 'code created + shown & confirmed by user',
   totpEnabled TINYINT NOT NULL DEFAULT 1 COMMENT 'eg. admin override',
   totpCreated TIMESTAMP NOT NULL DEFAULT now(),

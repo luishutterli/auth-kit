@@ -18,11 +18,12 @@
   "passwordHashAlgorithm": "SHA-512",
   "passwordSaltLength": 32,
   "databaseConfig": {
-    "type": "postgres",
-    "url": "postgres://authkit:password@localhost:5432/authkit",
+    "type": "mysql",
+    "url": "localhost",
+    "port": 3306,
     "username": "authkit",
     "secret": "password",
     "database": "authkit"
   },
-  "autoCreateSchema": false
+  "autoCreateSchema": true
 }

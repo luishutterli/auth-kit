@@ -5,14 +5,14 @@ const loadConfig = (path: string): AuthKitConfig => {
 	console.log(`Loading AuthKit configuration from ${fs.realpathSync(path)}`);
 	const config = JSON.parse(fs.readFileSync(path, "utf-8"));
 	assertConfig(config);
-  console.log("Configuration loaded successfully");
+	console.log("Configuration loaded successfully");
 	return config;
 };
 
 let config: AuthKitConfig | null = null;
-export const getConfig = (path: string): AuthKitConfig => {
+export const getConfig = (): AuthKitConfig => {
 	if (config) return config;
-	config = loadConfig(path);
+	config = loadConfig("./config/config.json");
 	return config;
 };
 
@@ -60,7 +60,7 @@ function assertConfig(input: unknown): asserts input is AuthKitConfig {
 	// databaseConfig
 	if (
 		typeof cfg.databaseConfig.type !== "string" ||
-		cfg.databaseConfig.type !== "postgres" ||
+		!["postgres", "mysql"].includes(cfg.databaseConfig.type) ||
 		typeof cfg.databaseConfig.url !== "string" ||
 		typeof cfg.databaseConfig.username !== "string" ||
 		typeof cfg.databaseConfig.secret !== "string"

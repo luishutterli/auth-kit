@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { getConfig } from "./config/config";
+import { getConnection } from "./db/connection";
+import { createSchema } from "./db/schema";
 
 const VERSION = "1.0.0";
 const bannerText = `
@@ -14,7 +16,22 @@ View on GitHub: https://github.com/luishutterli/auth-kit
 
 console.log(bannerText);
 
-const config = getConfig("./config/config.json");
+const config = getConfig();
+
+getConnection()
+	.then((connection) => {
+		console.log("Database connection established successfully");
+		connection.release();
+
+		if (config.autoCreateSchema) {
+			createSchema().catch((err) => {
+				console.error("Failed to create database schema:", err);
+			});
+		}
+	})
+	.catch((err) => {
+		console.error("Database connection failed:", err);
+	});
 
 const app = new Hono();
 app.basePath(config.baseUrl ?? "/");
