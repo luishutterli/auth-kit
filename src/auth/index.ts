@@ -1,0 +1,157 @@
+import { zValidator } from "@hono/zod-validator";
+import { DatabaseError } from "@luishutterli/auth-kit-types";
+import { Hono } from "hono";
+import type { ResultSetHeader, RowDataPacket } from "mysql2";
+import z from "zod";
+import { getConfig } from "../config/config";
+import { getConnection } from "../db/connection";
+import { dummyHashVerify, generateDBHash, verifyPassword } from "../util/hash";
+import { validatePasswordWithError } from "../util/password";
+
+const config = getConfig();
+
+const app = new Hono();
+
+// /signup
+const signupUserSchema = z.object({
+	email: z.email().max(255),
+	name: z.string().min(2).max(45),
+	surname: z.string().min(2).max(45),
+	password: z.string().min(2),
+});
+
+app.post("/signup", zValidator("json", signupUserSchema), async (c) => {
+	const { email, name, surname, password } = c.req.valid("json");
+	const passwordError = validatePasswordWithError(password);
+	if (passwordError) {
+		return c.json({ error: passwordError }, 400);
+	}
+
+	const connection = await getConnection();
+	try {
+		await connection.beginTransaction();
+
+		// Step 1: Check if user already exists
+		const [existingUsers] = await connection.execute<RowDataPacket[]>(
+			"SELECT * FROM TAccounts WHERE accEmail = ?",
+			[email],
+		);
+		if (existingUsers.length > 0) {
+			return c.json({ error: "Email already in use" }, 400);
+		}
+
+		// Step 2: Hash and salt the password
+		const hashedPassword = generateDBHash(password);
+
+		// Step 3: Insert the user into db (and get id)
+		const [result] = await connection.execute<ResultSetHeader>(
+			"insert into TAccounts (accEmail, accName, accSurname, accPasswordHash, accStatus) values (?, ?, ?, ?, 'active');",
+			[email, name, surname, hashedPassword],
+		);
+		const userId = result.insertId;
+
+		await connection.commit();
+
+		// TODO: Step 4: Login the user (create jwt...)
+
+		console.log("New user created with id:", userId);
+		return c.json({ success: true, userId }, 201);
+	} catch (error) {
+		await connection.rollback();
+		if (error instanceof DatabaseError) {
+			throw error;
+		}
+		throw new DatabaseError("Failed to sign up user", error as Error);
+	} finally {
+		connection.release();
+	}
+});
+
+// /login
+const loginUserSchema = z.object({
+	email: z.email(),
+	password: z.string().min(2),
+});
+
+const wrongCredentialMessage = "Wrong email or password";
+
+app.post("/login", zValidator("json", loginUserSchema), async (c) => {
+	const { email, password } = c.req.valid("json");
+
+	const connection = await getConnection();
+	try {
+		// Step 1: Check if user exists
+		const [users] = await connection.execute<
+			RowDataPacket[] & { accId: number; accPasswordHash: string }[]
+		>("SELECT accId, accPasswordHash FROM TAccounts WHERE accEmail = ?", [
+			email,
+		]);
+		if (users.length === 0) {
+			// NOTE: To mitigate email enumeration via timing attacks, a dummy hash is calculated
+			if (config.emailEnumerationProtection) dummyHashVerify();
+			return c.json({ success: false, error: wrongCredentialMessage }, 401);
+		}
+		const user = users[0];
+
+		const passwordValid = verifyPassword(user.accPasswordHash, password);
+		if (!passwordValid) {
+			return c.json({ success: false, error: wrongCredentialMessage }, 401);
+		}
+
+		// TODO: Step 4: Create JWT and return
+
+		return c.json({ success: true, userId: user.accId }, 200);
+	} catch (error) {
+		if (error instanceof DatabaseError) {
+			throw error;
+		}
+		throw new DatabaseError("Failed to log in user", error as Error);
+	} finally {
+		connection.release();
+	}
+});
+
+// /refresh
+// TODO: IMPLEMENT
+
+// /me
+// TODO: IMPLEMENT
+
+// /org/create
+const createOrgSchema = z.object({
+	name: z.string().min(3).max(255),
+});
+app.post("/org/create", zValidator("json", createOrgSchema), async (c) => {
+	const { name } = c.req.valid("json");
+
+	// TODO: Step 1: Check if user is logged in (jwt)
+
+	const connection = await getConnection();
+	try {
+		await connection.beginTransaction();
+
+		// Step 2: Create organization
+		const [result] = await connection.execute<ResultSetHeader>(
+			"insert into TOrganizations (orgName, orgStatus) values (?, 'active');",
+			[name],
+		);
+		const orgId = result.insertId;
+
+		// TODO: Step 3: Add current user to organization (with owner perms)
+
+		await connection.commit();
+
+		console.log("New organization created with id:", orgId);
+		return c.json({ success: true, orgId }, 201);
+	} catch (error) {
+		await connection.rollback();
+		if (error instanceof DatabaseError) {
+			throw error;
+		}
+		throw new DatabaseError("Failed to create organization", error as Error);
+	} finally {
+		connection.release();
+	}
+});
+
+export { app as authApp };

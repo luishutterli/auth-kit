@@ -1,8 +1,13 @@
 {
   "name": "@luishutterli/auth-kit",
+  "scripts": {
+    "start": "bun run ./src/index.ts"
+  },
   "dependencies": {
+    "@hono/zod-validator": "^0.7.2",
     "hono": "^4.7.7",
-    "mysql2": "^3.14.1"
+    "mysql2": "^3.14.3",
+    "zod": "^4.0.14"
   },
   "devDependencies": {
     "@luishutterli/auth-kit-types": "link:@luishutterli/auth-kit-types",

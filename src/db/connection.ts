@@ -1,10 +1,10 @@
-import mysql from "mysql2/promise";
 import { DatabaseError } from "@luishutterli/auth-kit-types";
+import mysql, { type PoolConnection } from "mysql2/promise";
 import { getConfig } from "../config/config";
 
 let pool: mysql.Pool | null = null;
 
-export const getConnection = async (): Promise<mysql.Connection> => {
+export const getConnection = async (): Promise<PoolConnection> => {
 	try {
 		if (!pool) {
 			const config = getConfig();

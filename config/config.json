@@ -15,15 +15,16 @@
       "path": "/"
     }
   },
-  "passwordHashAlgorithm": "SHA-512",
+  "passwordHashAlgorithm": "SHA512",
   "passwordSaltLength": 32,
+  "enforceVerifiedEmail": false,
   "databaseConfig": {
     "type": "mysql",
     "url": "localhost",
     "port": 3306,
     "username": "authkit",
     "secret": "password",
-    "database": "authkit"
+    "database": "AuthKit"
   },
   "autoCreateSchema": true
 }
