@@ -43,7 +43,7 @@ function assertConfig(input: unknown): asserts input is AuthKitConfig {
     typeof cfg.jwtConfig.secret !== "string" ||
     typeof cfg.jwtConfig.expiresIn !== "string" ||
     typeof cfg.jwtConfig.algorithm !== "string" ||
-    !["HMAC-SHA-256"].includes(cfg.jwtConfig.algorithm) ||
+    !["HS256"].includes(cfg.jwtConfig.algorithm) ||
     (cfg.jwtConfig.jwtStorageLocation && cfg.jwtConfig.jwtStorageLocation !== "cookie") ||
     (cfg.jwtConfig.cookieName && typeof cfg.jwtConfig.cookieName !== "string") ||
     (cfg.jwtConfig.cookieOptions &&

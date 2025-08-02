@@ -4,7 +4,7 @@
     "issuer": "AuthKit Demo",
     "secret": "supersecret",
     "expiresIn": "1h",
-    "algorithm": "HMAC-SHA-256",
+    "algorithm": "HS256",
     "jwtStorageLocation": "cookie",
     "cookieName": "authkit_token",
     "cookieOptions": {

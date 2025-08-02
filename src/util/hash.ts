@@ -15,7 +15,7 @@ const hashPassword = (password: string, salt: string): string => {
 	return hash.digest("hex");
 };
 
-const timingSafeCompare = (a: string, b: string): boolean => {
+export const timingSafeCompare = (a: string, b: string): boolean => {
 	if (a.length !== b.length) return false;
 	const aBuffer = Buffer.from(a, "hex");
 	const bBuffer = Buffer.from(b, "hex");
