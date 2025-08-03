@@ -165,7 +165,68 @@ app.post("/login", zValidator("json", loginUserSchema), async (c) => {
 // TODO: IMPLEMENT
 
 // /me
-// TODO: IMPLEMENT
+app.get("/me", jwtMiddleware, async (c) => {
+  const userId = c.get("userId");
+
+  const connection = await getConnection();
+  try {
+    // Step 1: Get fresh user data from database
+    const [users] = await connection.execute<
+      RowDataPacket[] &
+        {
+          accId: number;
+          accEmail: string;
+          accName: string;
+          accSurname: string;
+          accEmailVerified: number;
+          accCreated: Date;
+          accStatus: string;
+        }[]
+    >(
+      "SELECT accId, accEmail, accName, accSurname, accEmailVerified, accCreated, accStatus FROM TAccounts WHERE accId = ? AND accStatus = 'active'",
+      [userId],
+    );
+
+    if (users.length === 0)
+      return c.json({ success: false, error: "User not found or inactive" }, 404);
+
+    const userRow = users[0];
+
+    // Step 2: Create User object
+    const user: User = {
+      id: userRow.accId,
+      email: userRow.accEmail,
+      name: userRow.accName,
+      surname: userRow.accSurname,
+      emailVerified: userRow.accEmailVerified === 1,
+      createdAt: userRow.accCreated,
+      twoFactorEnabled: false,
+    };
+
+    return c.json(
+      {
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          surname: user.surname,
+          emailVerified: user.emailVerified,
+          createdAt: user.createdAt,
+          twoFactorEnabled: user.twoFactorEnabled,
+        },
+      },
+      200,
+    );
+  } catch (error) {
+    if (error instanceof DatabaseError) {
+      throw error;
+    }
+    throw new DatabaseError("Failed to get user information", error as Error);
+  } finally {
+    connection.release();
+  }
+});
 
 // /org/create
 const createOrgSchema = z.object({

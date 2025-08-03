@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { AuthKitError, type JWTPayload, type User } from "@luishutterli/auth-kit-types";
 import type { Context, Next } from "hono";
+import { createMiddleware } from "hono/factory";
+import type { Variables } from "hono/types";
 import { getConfig } from "../config/config";
 import { timingSafeCompare } from "../util/hash";
 import { parseTimeToSeconds } from "../util/time";
@@ -121,7 +123,9 @@ export const validateJWT = (jwt: JWT | JWTString): boolean => {
 };
 
 // Middleware
-export const jwtMiddleware = async (c: Context, next: Next) => {
+export const jwtMiddleware = createMiddleware<{
+  Variables: { userId: number; jwt: JWT };
+}>(async (c: Context, next: Next) => {
   const validation = validateJWTCookie(c);
   if (!validation.valid)
     return c.json(
@@ -133,4 +137,4 @@ export const jwtMiddleware = async (c: Context, next: Next) => {
   c.set("jwt", validation.jwt);
 
   await next();
-};
+});

@@ -15,7 +15,7 @@
       "path": "/"
     }
   },
-  "passwordHashAlgorithm": "SHA512",
+  "passwordHashAlgorithm": "SHA-512",
   "passwordSaltLength": 32,
   "enforceVerifiedEmail": false,
   "databaseConfig": {
