@@ -16,9 +16,9 @@ const hashPassword = (password: string, salt: string): string => {
 };
 
 export const timingSafeCompare = (a: string, b: string): boolean => {
-	if (a.length !== b.length) return false;
-	const aBuffer = Buffer.from(a, "hex");
+  const aBuffer = Buffer.from(a, "hex");
 	const bBuffer = Buffer.from(b, "hex");
+	if (aBuffer.length !== bBuffer.length) return false;
 	return crypto.timingSafeEqual(aBuffer, bBuffer);
 };
 

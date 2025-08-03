@@ -1,18 +1,20 @@
 import crypto from "node:crypto";
 import { AuthKitError, type User } from "@luishutterli/auth-kit-types";
+import type { Context, Next } from "hono";
 import { getConfig } from "../config/config";
 import { timingSafeCompare } from "../util/hash";
+import { validateJWTCookie } from "./cookies";
 
 const config = getConfig();
 const { jwtConfig } = config;
 
 // Types
-interface JWTHeader {
+export interface JWTHeader {
   alg: "HS256";
   typ: "jwt";
 }
 
-interface JWTPayload {
+export interface JWTPayload {
   iss: string;
   sub: number;
   exp: number;
@@ -22,11 +24,10 @@ interface JWTPayload {
   ver?: number;
 }
 
-interface JWT {
+export interface JWT {
   header: JWTHeader;
   payload: JWTPayload;
   signature: string;
-  
 }
 
 // Utils
@@ -53,7 +54,7 @@ const parseWrittenTimeToSeconds = (time: string | number): number => {
   throw new AuthKitError(`Invalid time unit: ${match[2]}`, "INVALID_TIME");
 };
 
-type JWTString = `${string}.${string}.${string}`;
+export type JWTString = `${string}.${string}.${string}`;
 
 export const JWTtoString = (jwt: JWT): JWTString => {
   const headerBase64 = base64UrlEncode(JSON.stringify(jwt.header));
@@ -63,7 +64,8 @@ export const JWTtoString = (jwt: JWT): JWTString => {
 
 export const stringToJWT = (jwt: JWTString): JWT => {
   const parts = jwt.split(".");
-  if (parts.length !== 3) throw new AuthKitError("Invalid JWT format", "INVALID_JWT_FORMAT");
+  if (parts.length !== 3)
+    throw new AuthKitError("Invalid JWT format", "INVALID_JWT_FORMAT");
 
   const [headerB64, payloadB64, signature] = parts;
 
@@ -78,7 +80,7 @@ export const stringToJWT = (jwt: JWTString): JWT => {
   } catch (_) {
     throw new AuthKitError("Failed to parse JWT", "JWT_PARSE_ERROR", 400);
   }
-}
+};
 
 // Create jwt's
 const createHeader = (): JWTHeader => ({ alg: "HS256", typ: "jwt" });
@@ -118,13 +120,41 @@ export const createSignedJWT = (user: User, ver?: number): JWT => {
 };
 
 export const validateJWT = (jwt: JWT | JWTString): boolean => {
-  if (typeof jwt === "string")
-    jwt = stringToJWT(jwt);
+  if (typeof jwt === "string") jwt = stringToJWT(jwt);
   const headerBase64 = base64UrlEncode(JSON.stringify(jwt.header));
   const payloadBase64 = base64UrlEncode(JSON.stringify(jwt.payload));
   const data = `${headerBase64}.${payloadBase64}`;
   const secret = jwtConfig.secret;
 
-  const expectedSignature = crypto.createHmac("sha256", secret).update(data).digest("base64url");
-  return timingSafeCompare(expectedSignature, jwt.signature);
+  const expectedSignature = crypto
+    .createHmac("sha256", secret)
+    .update(data)
+    .digest("base64url");
+  const matchingSignature = timingSafeCompare(expectedSignature, jwt.signature);
+  if (!matchingSignature) return false;
+
+  // Check validity
+  const now = Math.floor(Date.now() / 1000);
+  const { exp, nbf } = jwt.payload;
+  if (exp && now >= exp) return false; // expired
+  if (nbf && now < nbf) return false; // not yet valid
+
+  // TODO: Validate JWT version!!
+
+  return true;
+};
+
+// Middleware
+export const jwtMiddleware = async (c: Context, next: Next) => {
+  const validation = validateJWTCookie(c);
+  if (!validation.valid)
+    return c.json(
+      { success: false, error: "Invalid or missing token for authentication" },
+      401,
+    );
+
+  c.set("userId", validation.userId);
+  c.set("jwt", validation.jwt);
+
+  await next();
 };

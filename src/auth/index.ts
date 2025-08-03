@@ -7,7 +7,8 @@ import { getConfig } from "../config/config";
 import { getConnection } from "../db/connection";
 import { dummyHashVerify, generateDBHash, verifyPassword } from "../util/hash";
 import { validatePasswordWithError } from "../util/password";
-import { createSignedJWT, JWTtoString } from "./jwt";
+import { addJWTCookie } from "./cookies";
+import { createSignedJWT, JWTtoString, jwtMiddleware } from "./jwt";
 
 const config = getConfig();
 
@@ -53,7 +54,18 @@ app.post("/signup", zValidator("json", signupUserSchema), async (c) => {
 
     await connection.commit();
 
-    // TODO: Step 4: Login the user (create jwt...)
+    // Step 4: Login the user
+    const user: User = {
+      id: userId,
+      email,
+      name,
+      surname,
+      emailVerified: false,
+      createdAt: new Date(),
+      twoFactorEnabled: false,
+    };
+    const jwt = createSignedJWT(user);
+    addJWTCookie(c, jwt);
 
     console.log("New user created with id:", userId);
     return c.json({ success: true, userId }, 201);
@@ -97,7 +109,7 @@ app.post("/login", zValidator("json", loginUserSchema), async (c) => {
       `SELECT accId, accEmail, accName, accSurname, accPasswordHash, accEmailVerified, accCreated FROM TAccounts WHERE accEmail = ?`,
       [email],
     );
-    
+
     if (users.length === 0) {
       // NOTE: To mitigate email enumeration via timing attacks, a dummy hash is calculated
       if (config.emailEnumerationProtection) dummyHashVerify();
@@ -123,12 +135,11 @@ app.post("/login", zValidator("json", loginUserSchema), async (c) => {
 
     // Step 3: Create JWT and return
     const jwt = createSignedJWT(user);
-    const token = JWTtoString(jwt);
+    addJWTCookie(c, jwt);
 
     return c.json(
       {
         success: true,
-        accessToken: token,
         user: {
           id: user.id,
           email: user.email,
@@ -160,10 +171,8 @@ app.post("/login", zValidator("json", loginUserSchema), async (c) => {
 const createOrgSchema = z.object({
   name: z.string().min(3).max(255),
 });
-app.post("/org/create", zValidator("json", createOrgSchema), async (c) => {
+app.post("/org/create", jwtMiddleware, zValidator("json", createOrgSchema), async (c) => {
   const { name } = c.req.valid("json");
-
-  // TODO: Step 1: Check if user is logged in (jwt)
 
   const connection = await getConnection();
   try {
