@@ -1,3 +1,4 @@
+import { AuthKitError } from "@luishutterli/auth-kit-types";
 import { getConfig } from "../config/config";
 
 const config = getConfig();
@@ -12,8 +13,10 @@ const passwordPolicy = config.passwordPolicy ?? {
 };
 
 if (passwordPolicy.maxLength && passwordPolicy.minLength > passwordPolicy.maxLength) {
-  throw new Error(
-    `Invalid password policy: minLength (${passwordPolicy.minLength}) cannot be greater than maxLength (${passwordPolicy.maxLength})`
+  throw new AuthKitError(
+    `Invalid password policy: minLength (${passwordPolicy.minLength}) cannot be greater than maxLength (${passwordPolicy.maxLength})`,
+    "INVALID_PASSWORD_POLICY",
+    500,
   );
 }
 

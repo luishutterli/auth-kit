@@ -31,6 +31,7 @@ function assertConfig(input: unknown): asserts input is AuthKitConfig {
     typeof cfg.name !== "string" ||
     typeof cfg.jwtConfig !== "object" ||
     typeof cfg.passwordHashAlgorithm !== "string" ||
+    !["SHA-512"].includes(cfg.passwordHashAlgorithm) ||
     typeof cfg.passwordSaltLength !== "number" ||
     typeof cfg.databaseConfig !== "object" ||
     typeof cfg.autoCreateSchema !== "boolean"
@@ -75,7 +76,8 @@ function assertConfig(input: unknown): asserts input is AuthKitConfig {
         typeof cfg.passwordPolicy.maxLength !== "number") ||
       typeof cfg.passwordPolicy.requireUppercase !== "boolean" ||
       typeof cfg.passwordPolicy.requireLowercase !== "boolean" ||
-      typeof cfg.passwordPolicy.requireNumbers !== "boolean"
+      typeof cfg.passwordPolicy.requireNumbers !== "boolean" ||
+      typeof cfg.passwordPolicy.requireSpecialCharacters !== "boolean"
     ) {
       throw new AuthKitError("Invalid password policy configuration", "CONFIG_ERROR");
     }

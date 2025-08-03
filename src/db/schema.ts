@@ -2,13 +2,11 @@ import { DatabaseError } from "@luishutterli/auth-kit-types";
 import { getConnection } from "./connection";
 
 const schemaExists = async (): Promise<boolean> => {
+  const connection = await getConnection();
   try {
-    const connection = await getConnection();
     const [rows] = (await connection.query(
       "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'AuthKit'",
     )) as [any[], any];
-
-    connection.release();
 
     return Array.isArray(rows) && rows.length > 0;
   } catch (error) {
@@ -17,6 +15,8 @@ const schemaExists = async (): Promise<boolean> => {
       "Failed to check if schema exists",
       error instanceof Error ? error : undefined,
     );
+  } finally {
+    connection.release();
   }
 };
 
@@ -26,7 +26,9 @@ export const createSchema = async (): Promise<void> => {
     console.log("Database schema already exists, skipping creation");
     return;
   }
-  throw new Error(
+  
+  throw new DatabaseError(
     "Schema creation is not implemented yet. Please create the schema manually or implement this function.",
+    new Error("SCHEMA_CREATION_NOT_IMPLEMENTED"),
   );
 };

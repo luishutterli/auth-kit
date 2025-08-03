@@ -8,7 +8,7 @@ import { getConnection } from "../db/connection";
 import { dummyHashVerify, generateDBHash, verifyPassword } from "../util/hash";
 import { validatePasswordWithError } from "../util/password";
 import { addJWTCookie } from "./cookies";
-import { createSignedJWT, JWTtoString, jwtMiddleware } from "./jwt";
+import { createSignedJWT, jwtMiddleware } from "./jwt";
 
 const config = getConfig();
 

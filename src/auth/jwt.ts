@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
-import { AuthKitError, type User } from "@luishutterli/auth-kit-types";
+import { AuthKitError, type JWTPayload, type User } from "@luishutterli/auth-kit-types";
 import type { Context, Next } from "hono";
 import { getConfig } from "../config/config";
 import { timingSafeCompare } from "../util/hash";
+import { parseTimeToSeconds } from "../util/time";
 import { validateJWTCookie } from "./cookies";
 
 const config = getConfig();
@@ -12,16 +13,6 @@ const { jwtConfig } = config;
 export interface JWTHeader {
   alg: "HS256";
   typ: "jwt";
-}
-
-export interface JWTPayload {
-  iss: string;
-  sub: number;
-  exp: number;
-  nbf?: number;
-  iat: number;
-  user: User;
-  ver?: number;
 }
 
 export interface JWT {
@@ -37,21 +28,6 @@ const base64UrlEncode = (str: string): string => {
 
 const base64UrlDecode = (str: string): string => {
   return Buffer.from(str, "base64url").toString("utf-8");
-};
-
-const parseWrittenTimeToSeconds = (time: string | number): number => {
-  if (typeof time === "number") return time;
-
-  const match = RegExp(/^(\d+)([smhd])$/).exec(time);
-  if (!match) throw new Error(`Invalid time format: ${time}`);
-
-  const value = parseInt(match[1], 10);
-  if (match[2].toLowerCase() === "s") return value;
-  else if (match[2].toLowerCase() === "m") return value * 60;
-  else if (match[2].toLowerCase() === "h") return value * 60 * 60;
-  else if (match[2].toLowerCase() === "d") return value * 60 * 60 * 24;
-
-  throw new AuthKitError(`Invalid time unit: ${match[2]}`, "INVALID_TIME");
 };
 
 export type JWTString = `${string}.${string}.${string}`;
@@ -90,7 +66,7 @@ const createPayload = (user: User, ver?: number): JWTPayload => {
   return {
     iss: jwtConfig.issuer || config.name,
     sub: user.id,
-    exp: now + parseWrittenTimeToSeconds(jwtConfig.expiresIn),
+    exp: now + parseTimeToSeconds(jwtConfig.expiresIn),
     iat: now,
     nbf: now,
     user,
@@ -139,7 +115,7 @@ export const validateJWT = (jwt: JWT | JWTString): boolean => {
   if (exp && now >= exp) return false; // expired
   if (nbf && now < nbf) return false; // not yet valid
 
-  // TODO: Validate JWT version!!
+  // TODO: Validate JWT version
 
   return true;
 };

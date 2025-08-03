@@ -11,7 +11,9 @@ const generateSalt = (): string => {
 
 const hashPassword = (password: string, salt: string): string => {
 	const toHash = `${password}${salt}`;
-	const hash = crypto.createHash(passwordHashAlgorithm).update(toHash);
+
+  const algorithm = passwordHashAlgorithm.toLowerCase().replace("-", "");
+	const hash = crypto.createHash(algorithm).update(toHash);
 	return hash.digest("hex");
 };
 
