@@ -13,6 +13,15 @@
       "sameSite": "Lax",
       "maxAge": 3600,
       "path": "/"
+    },
+    "refreshExpiresIn": "7d",
+    "refreshCookieName": "authkit_refresh",
+    "refreshCookieOptions": {
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "maxAge": 604800,
+      "path": "/"
     }
   },
   "passwordHashAlgorithm": "SHA-512",

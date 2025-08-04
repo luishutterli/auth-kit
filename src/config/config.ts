@@ -16,6 +16,9 @@ export const getConfig = (): AuthKitConfig => {
 
   // Populate some defaults if not provided
   config.jwtConfig.issuer ??= config.name;
+  config.jwtConfig.refreshExpiresIn ??= "7d";
+  config.jwtConfig.refreshCookieName ??= "authkit_refresh";
+  config.jwtConfig.refreshCookieOptions ??= config.jwtConfig.cookieOptions;
   config.enforceVerifiedEmail ??= true;
   config.emailEnumerationProtection ??= true;
 
@@ -47,12 +50,20 @@ function assertConfig(input: unknown): asserts input is AuthKitConfig {
     !["HS256"].includes(cfg.jwtConfig.algorithm) ||
     (cfg.jwtConfig.jwtStorageLocation && cfg.jwtConfig.jwtStorageLocation !== "cookie") ||
     (cfg.jwtConfig.cookieName && typeof cfg.jwtConfig.cookieName !== "string") ||
+    (cfg.jwtConfig.refreshCookieName && typeof cfg.jwtConfig.refreshCookieName !== "string") ||
+    (cfg.jwtConfig.refreshExpiresIn && typeof cfg.jwtConfig.refreshExpiresIn !== "string") ||
     (cfg.jwtConfig.cookieOptions &&
       (typeof cfg.jwtConfig.cookieOptions.httpOnly !== "boolean" ||
         typeof cfg.jwtConfig.cookieOptions.secure !== "boolean" ||
         !["Strict", "Lax", "None"].includes(cfg.jwtConfig.cookieOptions.sameSite) ||
         (cfg.jwtConfig.cookieOptions.maxAge &&
-          typeof cfg.jwtConfig.cookieOptions.maxAge !== "number")))
+          typeof cfg.jwtConfig.cookieOptions.maxAge !== "number"))) ||
+    (cfg.jwtConfig.refreshCookieOptions &&
+      (typeof cfg.jwtConfig.refreshCookieOptions.httpOnly !== "boolean" ||
+        typeof cfg.jwtConfig.refreshCookieOptions.secure !== "boolean" ||
+        !["Strict", "Lax", "None"].includes(cfg.jwtConfig.refreshCookieOptions.sameSite) ||
+        (cfg.jwtConfig.refreshCookieOptions.maxAge &&
+          typeof cfg.jwtConfig.refreshCookieOptions.maxAge !== "number")))
   ) {
     throw new AuthKitError("Invalid JWT configuration", "CONFIG_ERROR");
   }

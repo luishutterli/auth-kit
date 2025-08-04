@@ -2,11 +2,12 @@ import crypto from "node:crypto";
 import { AuthKitError, type JWTPayload, type User } from "@luishutterli/auth-kit-types";
 import type { Context, Next } from "hono";
 import { createMiddleware } from "hono/factory";
-import type { Variables } from "hono/types";
+import type { RowDataPacket } from "mysql2";
 import { getConfig } from "../config/config";
+import { getConnection } from "../db/connection";
 import { timingSafeCompare } from "../util/hash";
 import { parseTimeToSeconds } from "../util/time";
-import { validateJWTCookie } from "./cookies";
+import { setTokenPair, validateJWTCookie, validateRefreshTokenCookie } from "./cookies";
 
 const config = getConfig();
 const { jwtConfig } = config;
@@ -71,7 +72,22 @@ const createPayload = (user: User, ver?: number): JWTPayload => {
     exp: now + parseTimeToSeconds(jwtConfig.expiresIn),
     iat: now,
     nbf: now,
+    type: "access",
     user,
+    ver,
+  };
+};
+
+const createRefreshPayload = (userId: number, ver?: number): JWTPayload => {
+  const now = Math.floor(Date.now() / 1000);
+  const refreshExpiresIn = jwtConfig.refreshExpiresIn || "7d";
+  return {
+    iss: jwtConfig.issuer || config.name,
+    sub: userId,
+    exp: now + parseTimeToSeconds(refreshExpiresIn),
+    iat: now,
+    nbf: now,
+    type: "refresh",
     ver,
   };
 };
@@ -88,6 +104,18 @@ const createSignature = (header: JWTHeader, payload: JWTPayload): string => {
 export const createSignedJWT = (user: User, ver?: number): JWT => {
   const header = createHeader();
   const payload = createPayload(user, ver);
+  const signature = createSignature(header, payload);
+
+  return {
+    header,
+    payload,
+    signature,
+  };
+};
+
+export const createRefreshToken = (userId: number, ver?: number): JWT => {
+  const header = createHeader();
+  const payload = createRefreshPayload(userId, ver);
   const signature = createSignature(header, payload);
 
   return {
@@ -117,24 +145,96 @@ export const validateJWT = (jwt: JWT | JWTString): boolean => {
   if (exp && now >= exp) return false; // expired
   if (nbf && now < nbf) return false; // not yet valid
 
-  // TODO: Validate JWT version
-
   return true;
+};
+
+export const validateAccessToken = (jwt: JWT | JWTString): boolean => {
+  if (!validateJWT(jwt)) return false;
+  const jwtObj = typeof jwt === "string" ? stringToJWT(jwt) : jwt;
+  return jwtObj.payload.type === "access";
+};
+
+export const validateRefreshToken = (jwt: JWT | JWTString): boolean => {
+  if (!validateJWT(jwt)) return false;
+  const jwtObj = typeof jwt === "string" ? stringToJWT(jwt) : jwt;
+  return jwtObj.payload.type === "refresh";
+};
+
+export const extractUserId = (jwt: JWT | JWTString): number | null => {
+  try {
+    const jwtObj = typeof jwt === "string" ? stringToJWT(jwt) : jwt;
+    return jwtObj.payload.sub;
+  } catch {
+    return null;
+  }
 };
 
 // Middleware
 export const jwtMiddleware = createMiddleware<{
-  Variables: { userId: number; jwt: JWT };
+  Variables: { userId: number; jwt: JWT; refreshed: boolean };
 }>(async (c: Context, next: Next) => {
   const validation = validateJWTCookie(c);
-  if (!validation.valid)
+
+  if (validation.valid) {
+    c.set("userId", validation.userId);
+    c.set("jwt", validation.jwt);
+    c.set("refreshed", false);
+    await next();
+    return;
+  }
+
+  const refreshValidation = validateRefreshTokenCookie(c);
+  if (!refreshValidation.valid) {
     return c.json(
       { success: false, error: "Invalid or missing token for authentication" },
       401,
     );
+  }
 
-  c.set("userId", validation.userId);
-  c.set("jwt", validation.jwt);
+  const connection = await getConnection();
+  try {
+    const [users] = await connection.execute<
+      RowDataPacket[] &
+        {
+          accId: number;
+          accEmail: string;
+          accName: string;
+          accSurname: string;
+          accEmailVerified: number;
+          accCreated: Date;
+        }[]
+    >(
+      "SELECT accId, accEmail, accName, accSurname, accEmailVerified, accCreated FROM TAccounts WHERE accId = ? AND accStatus = 'active'",
+      [refreshValidation.userId],
+    );
 
-  await next();
+    if (users.length === 0) {
+      return c.json({ success: false, error: "User not found or inactive" }, 401);
+    }
+
+    const userRow = users[0];
+    const user: User = {
+      id: userRow.accId,
+      email: userRow.accEmail,
+      name: userRow.accName,
+      surname: userRow.accSurname,
+      emailVerified: userRow.accEmailVerified === 1,
+      createdAt: userRow.accCreated,
+      twoFactorEnabled: false,
+    };
+
+    const newAccessToken = createSignedJWT(user);
+    const newRefreshToken = createRefreshToken(user.id);
+    setTokenPair(c, newAccessToken, newRefreshToken);
+
+    c.set("userId", user.id);
+    c.set("jwt", newAccessToken);
+    c.set("refreshed", true);
+
+    await next();
+  } catch (_error) {
+    return c.json({ success: false, error: "Authentication refresh failed" }, 401);
+  } finally {
+    connection.release();
+  }
 });

@@ -7,8 +7,8 @@ import { getConfig } from "../config/config";
 import { getConnection } from "../db/connection";
 import { dummyHashVerify, generateDBHash, verifyPassword } from "../util/hash";
 import { validatePasswordWithError } from "../util/password";
-import { addJWTCookie } from "./cookies";
-import { createSignedJWT, jwtMiddleware } from "./jwt";
+import { clearTokenPair, setTokenPair, validateRefreshTokenCookie } from "./cookies";
+import { createRefreshToken, createSignedJWT, jwtMiddleware } from "./jwt";
 
 const config = getConfig();
 
@@ -35,7 +35,7 @@ app.post("/signup", zValidator("json", signupUserSchema), async (c) => {
 
     // Step 1: Check if user already exists
     const [existingUsers] = await connection.execute<RowDataPacket[]>(
-      "SELECT * FROM TAccounts WHERE accEmail = ?",
+      "select * from TAccounts where accEmail = ?",
       [email],
     );
     if (existingUsers.length > 0) {
@@ -47,7 +47,7 @@ app.post("/signup", zValidator("json", signupUserSchema), async (c) => {
 
     // Step 3: Insert the user into db (and get id)
     const [result] = await connection.execute<ResultSetHeader>(
-      "insert into TAccounts (accEmail, accName, accSurname, accPasswordHash, accStatus) values (?, ?, ?, ?, 'active');",
+      "insert into TAccounts (accEmail, accName, accSurname, accPasswordHash, accStatus) values (?, ?, ?, ?, 'active')",
       [email, name, surname, hashedPassword],
     );
     const userId = result.insertId;
@@ -64,8 +64,9 @@ app.post("/signup", zValidator("json", signupUserSchema), async (c) => {
       createdAt: new Date(),
       twoFactorEnabled: false,
     };
-    const jwt = createSignedJWT(user);
-    addJWTCookie(c, jwt);
+    const accessToken = createSignedJWT(user);
+    const refreshToken = createRefreshToken(user.id);
+    setTokenPair(c, accessToken, refreshToken);
 
     console.log("New user created with id:", userId);
     return c.json({ success: true, userId }, 201);
@@ -106,7 +107,7 @@ app.post("/login", zValidator("json", loginUserSchema), async (c) => {
           accCreated: Date;
         }[]
     >(
-      `SELECT accId, accEmail, accName, accSurname, accPasswordHash, accEmailVerified, accCreated FROM TAccounts WHERE accEmail = ?`,
+      "select accId, accEmail, accName, accSurname, accPasswordHash, accEmailVerified, accCreated from TAccounts where accEmail = ? and accStatus = 'active'",
       [email],
     );
 
@@ -134,8 +135,9 @@ app.post("/login", zValidator("json", loginUserSchema), async (c) => {
     };
 
     // Step 3: Create JWT and return
-    const jwt = createSignedJWT(user);
-    addJWTCookie(c, jwt);
+    const accessToken = createSignedJWT(user);
+    const refreshToken = createRefreshToken(user.id);
+    setTokenPair(c, accessToken, refreshToken);
 
     return c.json(
       {
@@ -162,7 +164,78 @@ app.post("/login", zValidator("json", loginUserSchema), async (c) => {
 });
 
 // /refresh
-// TODO: IMPLEMENT
+app.post("/refresh", async (c) => {
+  const refreshValidation = validateRefreshTokenCookie(c);
+
+  if (!refreshValidation.valid) {
+    return c.json({ success: false, error: "Invalid or missing refresh token" }, 401);
+  }
+
+  const connection = await getConnection();
+  try {
+    const [users] = await connection.execute<
+      RowDataPacket[] &
+        {
+          accId: number;
+          accEmail: string;
+          accName: string;
+          accSurname: string;
+          accEmailVerified: number;
+          accCreated: Date;
+        }[]
+    >(
+      "select accId, accEmail, accName, accSurname, accEmailVerified, accCreated from TAccounts where accId = ? and accStatus = 'active'",
+      [refreshValidation.userId],
+    );
+
+    if (users.length === 0) {
+      return c.json({ success: false, error: "User not found or inactive" }, 404);
+    }
+
+    const userRow = users[0];
+    const user: User = {
+      id: userRow.accId,
+      email: userRow.accEmail,
+      name: userRow.accName,
+      surname: userRow.accSurname,
+      emailVerified: userRow.accEmailVerified === 1,
+      createdAt: userRow.accCreated,
+      twoFactorEnabled: false,
+    };
+
+    const newAccessToken = createSignedJWT(user);
+    const newRefreshToken = createRefreshToken(user.id);
+    setTokenPair(c, newAccessToken, newRefreshToken);
+
+    return c.json(
+      {
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          surname: user.surname,
+          emailVerified: user.emailVerified,
+          twoFactorEnabled: user.twoFactorEnabled,
+        },
+      },
+      200,
+    );
+  } catch (error) {
+    if (error instanceof DatabaseError) {
+      throw error;
+    }
+    throw new DatabaseError("Failed to refresh token", error as Error);
+  } finally {
+    connection.release();
+  }
+});
+
+// /logout
+app.post("/logout", async (c) => {
+  clearTokenPair(c);
+  return c.json({ success: true }, 200);
+});
 
 // /me
 app.get("/me", jwtMiddleware, async (c) => {
@@ -183,7 +256,7 @@ app.get("/me", jwtMiddleware, async (c) => {
           accStatus: string;
         }[]
     >(
-      "SELECT accId, accEmail, accName, accSurname, accEmailVerified, accCreated, accStatus FROM TAccounts WHERE accId = ? AND accStatus = 'active'",
+      "select accId, accEmail, accName, accSurname, accEmailVerified, accCreated, accStatus from TAccounts where accId = ? and accStatus = 'active'",
       [userId],
     );
 
@@ -240,13 +313,23 @@ app.post("/org/create", jwtMiddleware, zValidator("json", createOrgSchema), asyn
     await connection.beginTransaction();
 
     // Step 2: Create organization
-    const [result] = await connection.execute<ResultSetHeader>(
-      "insert into TOrganizations (orgName, orgStatus) values (?, 'active');",
+    const [orgResult] = await connection.execute<ResultSetHeader>(
+      "insert into TOrganizations (orgName, orgStatus) values (?, 'active')",
       [name],
     );
-    const orgId = result.insertId;
+    const orgId = orgResult.insertId;
 
-    // TODO: Step 3: Add current user to organization (with owner perms)
+    // Step 3: Add current user to organization
+    const [_orgMembResult] = await connection.execute<ResultSetHeader>(
+      "insert into TOrgMemberships (orgId, accId, orgMembStatus) values (?, ?, 'active')",
+      [orgId, c.get("userId")],
+    );
+
+    // Step 4: Add owner role to the user
+    const [_groupMembResult] = await connection.execute<ResultSetHeader>(
+      "insert into TGroupMemberships (groupId, accId, orgId, groupMembStatus) select groupId, ?, ?, 'active' from TGroups where groupName = 'Owner' and orgId is null limit 1",
+      [c.get("userId"), orgId],
+    );
 
     await connection.commit();
 
