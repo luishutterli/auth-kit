@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.1.3",
-    "@luishutterli/auth-kit-types": "link:@luishutterli/auth-kit-types",
+    "@luishutterli/auth-kit-types": "^1.0.1",
     "@types/bun": "latest"
   }
 }
