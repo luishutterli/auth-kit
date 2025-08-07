@@ -40,10 +40,14 @@ export const validateJWTCookie = (
   const token = getCookie(c, jwtConfig.cookieName ?? "authkit_token");
   if (!token) return { valid: false };
 
-  const jwt = stringToJWT(token as JWTString);
-  const success = validateAccessToken(jwt);
-  if (!success) return { valid: false };
-  return { valid: true, jwt, userId: jwt.payload.sub };
+  try {
+    const jwt = stringToJWT(token as JWTString);
+    const success = validateAccessToken(jwt);
+    if (!success) return { valid: false };
+    return { valid: true, jwt, userId: jwt.payload.sub };
+  } catch {
+    return { valid: false };
+  }
 };
 
 export const addRefreshTokenCookie = (c: Context, jwt: JWT): void =>
@@ -61,10 +65,14 @@ export const validateRefreshTokenCookie = (
   const token = getCookie(c, jwtConfig.refreshCookieName ?? "authkit_refresh");
   if (!token) return { valid: false };
 
-  const jwt = stringToJWT(token as JWTString);
-  const success = validateRefreshToken(jwt);
-  if (!success) return { valid: false };
-  return { valid: true, jwt, userId: jwt.payload.sub };
+  try {
+    const jwt = stringToJWT(token as JWTString);
+    const success = validateRefreshToken(jwt);
+    if (!success) return { valid: false };
+    return { valid: true, jwt, userId: jwt.payload.sub };
+  } catch {
+    return { valid: false };
+  }
 };
 
 export const setTokenPair = (c: Context, accessToken: JWT, refreshToken: JWT): void => {

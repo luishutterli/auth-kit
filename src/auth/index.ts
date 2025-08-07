@@ -326,10 +326,13 @@ app.post("/org/create", jwtMiddleware, zValidator("json", createOrgSchema), asyn
     );
 
     // Step 4: Add owner role to the user
-    const [_groupMembResult] = await connection.execute<ResultSetHeader>(
+    const [groupMembResult] = await connection.execute<ResultSetHeader>(
       "insert into TGroupMemberships (groupId, accId, orgId, groupMembStatus) select groupId, ?, ?, 'active' from TGroups where groupName = 'Owner' and orgId is null limit 1",
       [c.get("userId"), orgId],
     );
+
+    if (groupMembResult.affectedRows !== 1)
+      throw new DatabaseError("Failed to assign owner role to the user");
 
     await connection.commit();
 
