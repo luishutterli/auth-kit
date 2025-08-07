@@ -29,7 +29,7 @@
   "enforceVerifiedEmail": false,
   "databaseConfig": {
     "type": "mysql",
-    "url": "localhost",
+    "url": "db",
     "port": 3306,
     "username": "authkit",
     "secret": "password",

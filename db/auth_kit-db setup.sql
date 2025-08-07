@@ -11,6 +11,7 @@
     Version     Date        Who      Description
     1.0         19.04.2025  Luis     created
     1.1         26.04.2025  Luis     removed wrong identifying relations, removed enum enforcing on oauth provider, renived engine (pg compliance)
+    1.2         07.08.2025  Luis     removed compound pk from TGroupMemberships and added auto-increment key instead
     
     Copyright © 2025 Luis Hutterli, Switzerland. All rights reserved.
     This program/script is intended for the auth kit service built for swisscounts.ch
@@ -111,12 +112,13 @@ CREATE TABLE TGroupGrants (
 DROP TABLE IF EXISTS TGroupMemberships ;
 
 CREATE TABLE TGroupMemberships (
+  groupMembId INT NOT NULL AUTO_INCREMENT,
   groupId INT NOT NULL,
   accId INT NOT NULL,
   orgId INT NULL COMMENT 'null if group scope is global',
   groupMembCreated TIMESTAMP NOT NULL DEFAULT now(),
   groupMembStatus ENUM('active', 'suspended', 'deleted') NOT NULL,
-  PRIMARY KEY (groupId, accId));
+  PRIMARY KEY (groupMembId));
 
 
 -- -----------------------------------------------------
