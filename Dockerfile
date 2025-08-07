@@ -18,4 +18,4 @@ COPY ./src ./src
 ENV NODE_ENV=production
 
 USER bun
-CMD ["dockerize", "-wait", "tcp://db:3306", "-timeout", "10s", "bun", "start"]
+CMD ["sh", "-c", "dockerize -wait tcp://${DB_HOST:-db}:${DB_PORT:-3306} -timeout ${TIMEOUT:-10s} bun start"]
