@@ -45,7 +45,7 @@ CREATE TABLE TAccounts (
   accEmail VARCHAR(255) NOT NULL,
   accName VARCHAR(45) NOT NULL,
   accSurname VARCHAR(45) NOT NULL,
-  accPasswordHash CHAR(160) NULL,
+  accPasswordHash CHAR(192) NULL COMMENT 'Format: SHA512 as hex (128 chars) + 32 byte salt as hex (256 bits, 64 chars)',
   accEmailVerified TINYINT NOT NULL DEFAULT 0,
   accJWTversion INT NOT NULL DEFAULT 0,
   accCreated TIMESTAMP NOT NULL DEFAULT now(),
@@ -171,7 +171,7 @@ DROP TABLE IF EXISTS TTwoFactorTOTP ;
 
 CREATE TABLE TTwoFactorTOTP (
   accId INT NOT NULL,
-  totpSecret CHAR(512) NOT NULL COMMENT 'encrypted totp secret, size not known yet',
+  totpSecret VARCHAR(512) NOT NULL COMMENT 'encrypted totp secret, size not known yet',
   totpConfirmed TINYINT NOT NULL DEFAULT 0 COMMENT 'code created + shown & confirmed by user',
   totpEnabled TINYINT NOT NULL DEFAULT 1 COMMENT 'eg. admin override',
   totpCreated TIMESTAMP NOT NULL DEFAULT now(),

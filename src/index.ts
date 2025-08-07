@@ -1,176 +1,68 @@
 import { Hono } from "hono";
-import { setCookie } from "hono/cookie";
-import type { AuthKitConfig, User } from "@luishutterli/auth-kit-types";
-import {
-  AuthKitError,
-  AuthenticationError,
-  DatabaseError,
-} from "@luishutterli/auth-kit-types";
-import { AuthService } from "./services/auth.service";
-import { OrganizationService } from "./services/organization.service";
-import { authenticate, getUser } from "./middleware/auth.middleware";
-import { initializeDatabase } from "./utils/db-init";
-import type { UnofficialStatusCode } from "hono/utils/http-status";
+import { cors } from "hono/cors";
+import { authApp } from "./auth";
+import { getConfig } from "./config/config";
+import { getConnection } from "./db/connection";
+import { createSchema } from "./db/schema";
 
-export async function createAuthRouter(config: AuthKitConfig) {
-  await initializeDatabase(config.databaseConfig, config.autoCreateSchema);
+const VERSION = "1.0.0";
+const bannerText = `
+    ___         __  __    __ __ _ __
+   /   | __  __/ /_/ /_  / //_/(_) /_
+  / /| |/ / / / __/ __ \\/ ,<  / / __/
+ / ___ / /_/ / /_/ / / / /| |/ / /_
+/_/  |_\\__,_/\\__/_/ /_/_/ |_/_/\\__/ v${VERSION} by Luis Hutterli (https://luishutterli.ch)
 
-  const authService = new AuthService(config);
-  const orgService = new OrganizationService();
+View on GitHub: https://github.com/luishutterli/auth-kit
+`;
 
-  const app = new Hono();
+console.log(bannerText);
 
-  app.basePath(config.baseUrl);
+const config = getConfig();
 
-  app.use("*", async (c, next) => {
-    try {
-      await next();
-    } catch (error) {
-      if (error instanceof AuthKitError) {
-        return c.json(error.toJSON(), error.statusCode as UnofficialStatusCode);
-      }
-      return c.json({ error: "Internal server error" }, 500);
+getConnection()
+  .then((connection) => {
+    console.log("Database connection established successfully");
+    connection.release();
+
+    if (config.autoCreateSchema) {
+      createSchema().catch((err) => {
+        console.error("Failed to create database schema:", err);
+        process.exit(1);
+      });
     }
+  })
+  .catch((err) => {
+    console.error("Database connection failed:", err);
+    process.exit(1);
   });
 
-  app.get("/", (c) => {
-    return c.json({ status: "ok", service: config.name });
-  });
+const app = new Hono();
+app.basePath(config.baseUrl ?? "/");
 
-  app.post("/signup", async (c) => {
-    try {
-      const body = await c.req.json();
-      const { email, password, name, surname } = body;
+// CORS
+app.use("*", cors({ origin: "http://localhost:5173", credentials: true }));
 
-      if (!email || !password || !name || !surname) {
-        throw new AuthenticationError("Missing required fields", 400);
-      }
+app.use("*", async (c, next) => {
+  c.header("Server", `AuthKit/${VERSION}`);
+  c.header("X-Powered-By", `AuthKit, the modern authentication framework`);
 
-      const result = await authService.signup(email, password, name, surname);
+  await next();
+});
 
-      if (
-        config.jwtConfig.jwtStorageLocation === "cookie" &&
-        config.jwtConfig.cookieName
-      ) {
-        setCookie(
-          c,
-          config.jwtConfig.cookieName,
-          result.accessToken,
-          config.jwtConfig.cookieOptions,
-        );
-      }
+// Routes
+app.get("/", (c) => {
+  return c.text(`Welcome to AuthKit v${VERSION} by Luis Hutterli`);
+});
 
-      const { accessToken, refreshToken, ...resultWithoutTokens } = result;
-      return c.json(resultWithoutTokens);
-    } catch (error) {
-      if (error instanceof AuthKitError) {
-        throw error;
-      }
-      throw new DatabaseError("Signup failed", error as Error);
-    }
-  });
+app.get("/status", (c) => {
+  return c.json({ status: "ok", version: VERSION, service: config.name });
+});
 
-  app.post("/login", async (c) => {
-    try {
-      const body = await c.req.json();
-      const { email, password } = body;
+const versionRoute = `/v${VERSION.split(".")[0]}`;
+app.route(versionRoute, authApp);
 
-      if (!email || !password) {
-        throw new AuthenticationError("Missing email or password", 400);
-      }
-
-      const ip = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "na"; // TODO: get ip
-      const userAgent = c.req.header("user-agent") ?? "unknown";
-
-      const result = await authService.login(email, password, ip, userAgent);
-
-      if (
-        config.jwtConfig.jwtStorageLocation === "cookie" &&
-        config.jwtConfig.cookieName
-      ) {
-        setCookie(
-          c,
-          config.jwtConfig.cookieName,
-          result.accessToken,
-          config.jwtConfig.cookieOptions,
-        );
-      }
-
-      const { accessToken, refreshToken, ...resultWithoutTokens } = result;
-      return c.json(resultWithoutTokens);
-    } catch (error) {
-      if (error instanceof AuthKitError) {
-        throw error;
-      }
-      throw new DatabaseError("Login failed", error as Error);
-    }
-  });
-
-  app.post("/refresh", async (c) => {
-    try {
-      const body = await c.req.json();
-      const { refreshToken } = body;
-
-      if (!refreshToken) {
-        throw new AuthenticationError("Missing refresh token", 400);
-      }
-
-      const result = await authService.refreshToken(refreshToken);
-
-      if (
-        config.jwtConfig.jwtStorageLocation === "cookie" &&
-        config.jwtConfig.cookieName
-      ) {
-        setCookie(
-          c,
-          config.jwtConfig.cookieName,
-          result.accessToken,
-          config.jwtConfig.cookieOptions,
-        );
-      }
-
-      const { accessToken, refreshToken: _, ...resultWithoutTokens } = result;
-      return c.json(resultWithoutTokens);
-    } catch (error) {
-      if (error instanceof AuthKitError) {
-        throw error;
-      }
-      throw new DatabaseError("Token refresh failed", error as Error);
-    }
-  });
-
-  app.get("/me", authenticate(config, authService), async (c) => {
-    try {
-      const user = getUser(c);
-      return c.json({ user });
-    } catch (error) {
-      if (error instanceof AuthKitError) {
-        throw error;
-      }
-      throw new DatabaseError("Failed to get user info", error as Error);
-    }
-  });
-
-  app.post("/org/create", authenticate(config, authService), async (c) => {
-    try {
-      const user = getUser(c);
-      const body = await c.req.json();
-      const { orgName } = body;
-
-      if (!orgName) {
-        throw new AuthenticationError("Organization name is required", 400);
-      }
-
-      const organization = await orgService.createOrganization(orgName, user.id);
-
-      return c.json({ organization });
-    } catch (error) {
-      if (error instanceof AuthKitError) {
-        throw error;
-      }
-      throw new DatabaseError("Failed to create organization", error as Error);
-    }
-  });
-
-  return app;
-}
+export default {
+  port: config.port ?? 6575,
+  fetch: app.fetch,
+};
