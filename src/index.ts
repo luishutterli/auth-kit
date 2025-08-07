@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { authApp } from "./auth";
 import { getConfig } from "./config/config";
 import { getConnection } from "./db/connection";
@@ -36,6 +37,9 @@ getConnection()
 
 const app = new Hono();
 app.basePath(config.baseUrl ?? "/");
+
+// CORS
+app.use("*", cors({ origin: "http://localhost:5173", credentials: true }));
 
 app.use("*", async (c, next) => {
   c.header("Server", `AuthKit/${VERSION}`);
